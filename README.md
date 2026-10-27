@@ -21,6 +21,8 @@ The browser reads `/api/connections`; addresses stay configured on the server. P
 | `ARGOCD_CHECK_URL` | Optional internal Argo probe address |
 | `HEADLAMP_URL` | Browser launch address for Headlamp, including `/c/main` where appropriate |
 | `HEADLAMP_CHECK_URL` | Optional internal Headlamp probe address |
+| `LAUNCHPAD_URL`, `AMIP_URL`, `ARIS_URL`, `NUTRISAGE_URL` | Optional browser launch addresses for the four new apps; unset tiles remain pending |
+| `LAUNCHPAD_CHECK_URL`, `AMIP_CHECK_URL`, `ARIS_CHECK_URL`, `NUTRISAGE_CHECK_URL` | Optional internal reachability probes for the new apps |
 | `PRICE_SCOUT_ORIGIN` | Internal Price Scout origin, used for health checks and the `/price-scout` proxy |
 | `NODE_EXTRA_CA_CERTS` | Existing certificate bundle for trusted internal HTTPS, if required |
 

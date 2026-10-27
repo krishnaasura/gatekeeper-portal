@@ -412,3 +412,8 @@
 .motion-paused .terminal-card, .motion-paused .terminal-card:hover { transform: none; }
 @media(hover: none) { .terminal-card:hover { transform: none; } }
 @media(prefers-reduced-motion: reduce) { .terminal-card, .terminal-card:hover { transform: none; } }
+
+/* Let the expanded service filters wrap cleanly on narrow screens. */
+.directory-toolbar { flex-wrap: wrap; gap: 12px; }
+.filter-options { flex-wrap: wrap; row-gap: 10px; }
+.directory-total { margin-left: auto; }

@@ -34,10 +34,38 @@ test('independent service failures preserve Scout and do not expose probe URLs',
     assert.equal(url, 'http://scout:8091/price-scout/api/health');
     return Response.json({ healthy: true });
   });
-  assert.deepEqual(result.map(item => item.status), ['unavailable', 'invalid', 'online']);
+  assert.deepEqual(result.slice(0, 3).map(item => item.status), ['unavailable', 'invalid', 'online']);
   assert.ok(!JSON.stringify(result).includes('internal-argo'));
 });
 test('Scout requires healthy JSON, not just a responding web server', async () => {
   const result = await probe('scout', '/price-scout', 'http://scout/health', async () => Response.json({ healthy: false }));
   assert.equal(result.status, 'unavailable');
+});
+
+test('new app tiles stay pending without endpoints and never probe guessed addresses', async () => {
+  const requests = [];
+  const result = await connections({}, async url => {
+    requests.push(String(url));
+    return Response.json({ healthy: true });
+  });
+  assert.deepEqual(result.slice(3).map(item => [item.id, item.status, item.href]), [
+    ['launchpad', 'unconfigured', undefined], ['amip', 'unconfigured', undefined],
+    ['aris', 'unconfigured', undefined], ['nutrisage', 'unconfigured', undefined],
+  ]);
+  assert.deepEqual(requests, ['http://127.0.0.1:8091/price-scout/api/health']);
+});
+
+test('new apps use independent configured launch and probe addresses', async () => {
+  const result = await connections({
+    LAUNCHPAD_URL: 'https://apps.example/launchpad/', LAUNCHPAD_CHECK_URL: 'http://launchpad-internal/health',
+    AMIP_URL: 'https://apps.example/amip/', ARIS_URL: 'javascript:invalid', NUTRISAGE_URL: 'https://apps.example/nutrisage/',
+  }, async url => {
+    if (String(url).includes('price-scout')) return Response.json({ healthy: true });
+    if (String(url).includes('launchpad-internal')) return new Response(null, { status: 302 });
+    if (String(url).includes('/amip/')) return new Response(null, { status: 503 });
+    return new Response(null, { status: 401 });
+  });
+  assert.deepEqual(result.slice(3).map(item => item.status), ['reachable', 'unavailable', 'invalid', 'reachable']);
+  assert.equal(result[3].href, 'https://apps.example/launchpad/');
+  assert.ok(!JSON.stringify(result).includes('launchpad-internal'));
 });

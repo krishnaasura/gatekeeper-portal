@@ -1,20 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import type { Connection } from "@/lib/connections";
+import type { Connection, ServiceId } from "@/lib/connections";
 import TerminalBoot from "./terminal-boot";
 import TitleField from "./title-field";
 import "./terminal.css";
 
-type ServiceId = "argo" | "headlamp" | "scout";
-type Service = { id: ServiceId; name: string; code: string; category: string; description: string; icon: string; href?: string };
+type Service = { id: ServiceId; name: string; code: string; category: string; description: string; icon: string; group: "infrastructure" | "automation" | "applications"; route: string; href?: string };
 const directory: Service[] = [
-  { id: "argo", name: "Argo CD", code: "01", category: "DEPLOYMENT", description: "GitOps deployments, application sync and infrastructure state.", icon: "deploy" },
-  { id: "headlamp", name: "Headlamp", code: "02", category: "OBSERVABILITY", description: "Kubernetes workloads, pod logs and cluster resources.", icon: "cluster" },
-  { id: "scout", name: "Price Scout", code: "03", category: "AUTOMATION", description: "Hardware watchlists, price tracking and availability alerts.", icon: "radar", href: "/price-scout" },
+  { id: "argo", name: "Argo CD", code: "01", category: "DEPLOYMENT", description: "GitOps deployments, application sync and infrastructure state.", icon: "deploy", group: "infrastructure", route: "argocd" },
+  { id: "headlamp", name: "Headlamp", code: "02", category: "OBSERVABILITY", description: "Kubernetes workloads, pod logs and cluster resources.", icon: "cluster", group: "infrastructure", route: "headlamp" },
+  { id: "scout", name: "Price Scout", code: "03", category: "AUTOMATION", description: "Hardware watchlists, price tracking and availability alerts.", icon: "radar", group: "automation", route: "price-scout", href: "/price-scout" },
+  { id: "launchpad", name: "Launchpad", code: "04", category: "CAREER", description: "Job discovery, tailored resumes and application tracking.", icon: "career", group: "applications", route: "launchpad" },
+  { id: "amip", name: "AMIP", code: "05", category: "FINANCIAL RESEARCH", description: "SEC filings, company watchlists and evidence-backed financial comparisons.", icon: "research", group: "applications", route: "amip" },
+  { id: "aris", name: "ARIS", code: "06", category: "ENERGY INTELLIGENCE", description: "ERCOT notices, regulatory developments and interconnection digests.", icon: "energy", group: "applications", route: "aris" },
+  { id: "nutrisage", name: "NutriSage", code: "07", category: "NUTRITION", description: "Food journaling, macro tracking and a grounded local AI assistant.", icon: "nutrition", group: "applications", route: "nutrisage" },
 ];
 const statusLabels: Record<Connection["status"], string> = {
-  checking: "CHECKING", reachable: "REACHABLE", online: "ONLINE", unavailable: "UNREACHABLE", unconfigured: "NOT CONFIGURED", invalid: "CONFIG ERROR", "tls-error": "TLS ERROR",
+  checking: "CHECKING", reachable: "REACHABLE", online: "ONLINE", unavailable: "UNREACHABLE", unconfigured: "PENDING", invalid: "CONFIG ERROR", "tls-error": "TLS ERROR",
 };
 function Icon({ name, size = 20 }: {
     name: string;
@@ -25,6 +28,10 @@ function Icon({ name, size = 20 }: {
         deploy: <><path d="M12 3v12m-4-4 4 4 4-4M5 14v6h14v-6"/><path d="m5 7 7-4 7 4"/></>,
         cluster: <><path d="m12 2 9 5v10l-9 5-9-5V7Zm0 10 9-5M12 12 3 7m9 5v10"/><path d="m7.5 4.5 9 5v5"/></>,
         radar: <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="m12 12 7-7M12 2v2M2 12h2M12 20v2M20 12h2"/></>,
+        career: <><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h5m8 0h5m-9 5v-6m-3 3 3-3 3 3"/></>,
+        research: <><path d="M4 3v17h17M8 15v-3m5 3V9m5 6V6M7 8l5-3 4 1 4-4"/></>,
+        energy: <><path d="M14 2H5v20h14V7Zm0 0v5h5"/><path d="m12 9-4 6h4l-1 5 5-7h-4l1-4"/></>,
+        nutrition: <><path d="M3 13h18a9 9 0 0 1-18 0ZM8 22h8M12 11V8"/><path d="M12 8c0-4 3-6 7-6 0 4-2 7-7 6ZM12 9C8 9 5 7 5 3c4 0 7 2 7 6Z"/></>,
         arrow: <><path d="M5 12h14m-5-5 5 5-5 5"/></>,
         external: <><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></>,
         terminal: <><path d="m4 6 5 6-5 6m9 0h7"/></>,
@@ -119,9 +126,11 @@ export default function Gatekeeper() {
     const connection = connections.find(item => item.id === service.id);
     return { ...service, href: connection?.href ?? service.href, status: connection?.status ?? "checking" as Connection["status"], detail: connection?.detail ?? "Checking service connection…" };
   });
+  const configured = services.filter(service => service.status !== "unconfigured");
+  const pending = services.length - configured.length;
   const responding = services.filter(service => ["online", "reachable"].includes(service.status)).length;
   const checking = services.some(service => service.status === "checking");
-  const visible = services.filter(service => (filter === "all" || (filter === "infrastructure" ? service.id !== "scout" : service.id === "scout")) && `${service.name} ${service.category}`.toLowerCase().includes(query.toLowerCase()));
+  const visible = services.filter(service => (filter === "all" || service.group === filter) && `${service.name} ${service.category} ${service.description}`.toLowerCase().includes(query.toLowerCase()));
 
   return <main className="terminal-portal">
     {intro && <TerminalBoot onFinish={finishIntro}/>}
@@ -129,23 +138,23 @@ export default function Gatekeeper() {
       <a className="skip-link" href="#services">Skip to services</a>
       <header className="site-bar">
         <a className="site-brand" href="#top" aria-label="Gatekeeper home"><span className="monogram">F/</span><span>gatekeeper<span className="dim">_</span></span></a>
-        <nav aria-label="Primary navigation"><a href="#services">Services <span className="nav-number">03</span></a><button onClick={() => setSettings(true)}>Connections<Icon name="external" size={11}/></button><a href="https://github.com/krishnaasura/gatekeeper-portal" target="_blank" rel="noreferrer">Source<Icon name="github" size={14}/></a></nav>
+        <nav aria-label="Primary navigation"><a href="#services">Services <span className="nav-number">{String(directory.length).padStart(2, "0")}</span></a><button onClick={() => setSettings(true)}>Connections<Icon name="external" size={11}/></button><a href="https://github.com/krishnaasura/gatekeeper-portal" target="_blank" rel="noreferrer">Source<Icon name="github" size={14}/></a></nav>
         <span className="bar-time"><Clock/></span>
       </header>
       <div className="page-content" id="top">
         <TitleField paused={!motion || intro}/>
         <section className="directory-section" id="services" aria-labelledby="directory-title">
           <div className="directory-heading"><div className="section-title"><span className="section-index">01 /</span><h2 id="directory-title">Service directory</h2><span className="count-label">[ {String(services.length).padStart(2, "0")} ]</span></div><label className="service-search"><Icon name="search" size={15}/><input ref={search} value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a service" aria-label="Find a service"/><kbd>⌘ K</kbd></label></div>
-          <div className="directory-toolbar"><div className="filter-options" aria-label="Filter services">{[["all", "All"], ["infrastructure", "Infrastructure"], ["automation", "Automation"]].map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}{filter === value && <span>_</span>}</button>)}</div><span className="directory-total">{String(visible.length).padStart(2, "0")} ENTRIES <span className="dim">/ HTTP ROUTES</span></span></div>
+          <div className="directory-toolbar"><div className="filter-options" aria-label="Filter services">{[["all", "All"], ["infrastructure", "Infrastructure"], ["automation", "Automation"], ["applications", "Applications"]].map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}{filter === value && <span>_</span>}</button>)}</div><span className="directory-total">{String(visible.length).padStart(2, "0")} ENTRIES <span className="dim">/ HTTP ROUTES</span></span></div>
           <div className="terminal-service-grid">{visible.map((service, index) => <article key={service.id} onPointerMove={motion ? trackCard : undefined} onPointerLeave={event => { event.currentTarget.style.setProperty("--tilt-x", "0deg"); event.currentTarget.style.setProperty("--tilt-y", "0deg"); }} style={{ "--card-index": index } as CSSProperties} className={`terminal-card card-${service.id}`}>
             <div className="card-header"><span className="card-number">[ {service.code} ]</span><span className={`service-state ${["online", "reachable"].includes(service.status) ? "state-up" : ""}`} title={service.detail}><span className={["online", "reachable"].includes(service.status) ? "status-dot" : "status-ring"}/>{statusLabels[service.status]}</span></div>
             <div className="card-main"><div className="terminal-service-icon"><span className="icon-orbit"/><Icon name={service.icon} size={25}/></div><span className="service-category">{service.category}</span><h3>{service.name}</h3><p>{service.description}</p></div>
-            <div className="card-route"><span><span className="dim">route</span> /{service.id === "argo" ? "argocd" : service.id === "headlamp" ? "headlamp" : "price-scout"}</span>{service.href ? <a href={service.href} target={service.id === "scout" ? undefined : "_blank"} rel={service.id === "scout" ? undefined : "noreferrer"} aria-label={`Launch ${service.name}`}>Launch <Icon name="external" size={12}/></a> : <button disabled aria-label={`${service.name} launch unavailable: endpoint not configured`}>Launch <Icon name="external" size={12}/></button>}</div>
+            <div className="card-route"><span><span className="dim">route</span> /{service.route}</span>{service.href ? <a href={service.href} target={service.id === "scout" ? undefined : "_blank"} rel={service.id === "scout" ? undefined : "noreferrer"} aria-label={`Launch ${service.name}`}>Launch <Icon name="external" size={12}/></a> : <button disabled aria-label={`${service.name} launch unavailable: endpoint not configured`}>Launch <Icon name="external" size={12}/></button>}</div>
             <span className="card-corner" aria-hidden="true">+</span>
           </article>)}</div>
           {visible.length === 0 && <div className="empty-result"><span className="dim">grep: no matches</span><p>No services match this search.</p><button className="bracket-button" onClick={() => { setFilter("all"); setQuery(""); }}>Clear filters <span>↗</span></button></div>}
         </section>
-        <section className="status-console" aria-label="Connection summary"><div className="console-title"><Icon name="terminal" size={14}/><span>connection.log</span><span className="console-meta">READ ONLY</span></div><div className="console-content"><span className="console-timestamp">[{lastCheck}]</span><span className="console-key">{checking ? "WAIT" : "INFO"}</span><p role="status">{checking ? "Checking service endpoints…" : `${responding} of ${services.length} services responding.`}<span className="console-detail"> Probes refresh every 30s.</span></p><button onClick={() => setSettings(true)}>View details <span>↗</span></button></div></section>
+        <section className="status-console" aria-label="Connection summary"><div className="console-title"><Icon name="terminal" size={14}/><span>connection.log</span><span className="console-meta">READ ONLY</span></div><div className="console-content"><span className="console-timestamp">[{lastCheck}]</span><span className="console-key">{checking ? "WAIT" : "INFO"}</span><p role="status">{checking ? "Checking service endpoints…" : `${responding} of ${configured.length} configured services responding.${pending ? ` ${pending} pending.` : ""}`}<span className="console-detail"> Probes refresh every 30s.</span></p><button onClick={() => setSettings(true)}>View details <span>↗</span></button></div></section>
         <footer className="site-footer"><span>FOEHAMMER <span>/</span> GATEKEEPER</span><div><button onClick={() => setIntro(true)}><Icon name="replay" size={12}/>Replay boot</button><button aria-pressed={motion} onClick={() => setMotion(!motion)}><span className={motion ? "status-dot" : "status-ring"}/>Motion {motion ? "on" : "off"}</button></div></footer>
       </div>
     </div>

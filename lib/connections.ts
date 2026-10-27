@@ -1,5 +1,11 @@
+export const SERVICE_IDS = ["argo", "headlamp", "scout", "launchpad", "amip", "aris", "nutrisage"] as const;
+export type ServiceId = typeof SERVICE_IDS[number];
+const prefixes: Record<Exclude<ServiceId, "scout">, string> = {
+  argo: "ARGOCD", headlamp: "HEADLAMP", launchpad: "LAUNCHPAD", amip: "AMIP", aris: "ARIS", nutrisage: "NUTRISAGE",
+};
+
 export type Connection = {
-  id: "argo" | "headlamp" | "scout";
+  id: ServiceId;
   href?: string;
   status: "checking" | "reachable" | "online" | "unavailable" | "unconfigured" | "invalid" | "tls-error";
   detail: string;
@@ -15,7 +21,7 @@ export function publicUrl(value: string | undefined): string | undefined {
 
 export async function probe(id: Connection["id"], href: string | undefined, target: string | undefined,
   fetcher: typeof fetch = fetch): Promise<Connection> {
-  if (!href) return { id, status: "unconfigured", detail: "Waiting for an Omen service address." };
+  if (!href) return { id, status: "unconfigured", detail: "Launch address is not configured yet." };
   try {
     const response = await fetcher(target || href, {
       cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(4000),
@@ -36,14 +42,14 @@ export async function probe(id: Connection["id"], href: string | undefined, targ
     const tls = /CERT|TLS|SSL|SELF_SIGNED/.test(code);
     return { id, href, status: tls ? "tls-error" : "unavailable",
       detail: tls ? "Certificate could not be verified. Configure a trusted certificate."
-        : "Not reachable from Gatekeeper. Check Omen, Tailscale, and the service address." };
+        : "Not reachable from Gatekeeper. Check the homelab, Tailscale, and the service address." };
   }
 }
 
 export async function connections(env: NodeJS.ProcessEnv = process.env, fetcher: typeof fetch = fetch) {
-  return Promise.all((["argo", "headlamp", "scout"] as const).map(async id => {
+  return Promise.all(SERVICE_IDS.map(async id => {
     try {
-      const prefix = id === "argo" ? "ARGOCD" : "HEADLAMP";
+      const prefix = id === "scout" ? undefined : prefixes[id];
       const href = id === "scout" ? "/price-scout" : publicUrl(env[`${prefix}_URL`]);
       const target = id === "scout"
         ? new URL("/price-scout/api/health", publicUrl(env.PRICE_SCOUT_ORIGIN) || "http://127.0.0.1:8091").href
